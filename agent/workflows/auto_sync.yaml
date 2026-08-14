@@ -1,0 +1,31 @@
+# CloudDrive Hub — 自动同步工作流
+# 每天凌晨 2 点，将本地数据同步到网盘
+name: "nightly-backup"
+description: "每日凌晨增量备份到网盘"
+type: workflow
+trigger:
+  schedule: "0 2 * * *"  # cron 表达式
+steps:
+  - name: "check-mount"
+    action: "exec"
+    command: "mountpoint -q /mnt/cloud/aliyundrive"
+    on_fail: "remount-aliyun"
+  - name: "remount-aliyun"
+    action: "rclone-mount"
+    remote: "aliyundrive"
+    mount: "/mnt/cloud/aliyundrive"
+  - name: "sync-data"
+    action: "rclone-sync"
+    source: "/mnt/cloud/local/data"
+    target: "aliyundrive:backup/{{ date '%Y-%m-%d' }}"
+    type: "copy"
+    filters:
+      exclude:
+        - "*.tmp"
+        - "*.cache"
+        - "node_modules/"
+        - ".git/"
+      max_size: "10G"
+  - name: "report"
+    action: "log"
+    message: "✅ 每日备份完成: {{ date }}"
