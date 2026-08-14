@@ -1,0 +1,75 @@
+{
+  "name": "独立通道自愈巡检 — 手机版",
+  "description": "每3分钟巡检独立 ADB 通道(5037)、无线调试(34953)、Shizuku 状态，自动恢复",
+  "trigger": {
+    "type": "schedule",
+    "interval": 180
+  },
+  "nodes": [
+    {
+      "id": "check_5037",
+      "type": "command",
+      "command": "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/5037 2>&1 && echo ALIVE || echo DEAD'",
+      "timeout": 10000
+    },
+    {
+      "id": "check_34953",
+      "type": "command",
+      "command": "timeout 3 bash -c 'exec 3<>/dev/tcp/192.168.43.8/34953 2>&1 && echo ALIVE || echo DEAD'",
+      "timeout": 10000
+    },
+    {
+      "id": "check_shizuku",
+      "type": "bash",
+      "command": "pidof moe.shizuku.privileged.api 2>/dev/null && echo ALIVE || echo DEAD",
+      "timeout": 10000
+    },
+    {
+      "id": "check_iadb",
+      "type": "bash",
+      "command": "pidof com.iadb.helper 2>/dev/null && echo ALIVE || echo DEAD",
+      "timeout": 10000
+    },
+    {
+      "id": "restart_shizuku",
+      "type": "am",
+      "command": "am start -n moe.shizuku.privileged.api/moe.shizuku.manager.MainActivity",
+      "timeout": 15000
+    },
+    {
+      "id": "restart_iadb",
+      "type": "am",
+      "command": "am start -n com.iadb.helper/.MainActivity",
+      "timeout": 15000
+    },
+    {
+      "id": "heal_adb",
+      "type": "bash",
+      "command": "cd /data/local/tmp && ./adb_server_shell 2>&1 | head -3",
+      "timeout": 15000
+    },
+    {
+      "id": "report",
+      "type": "bash",
+      "command": "echo \"[PATROL] $(date) | 5037:$(cat /tmp/patrol_5037 2>/dev/null) | 34953:$(cat /tmp/patrol_34953 2>/dev/null) | Shizuku:$(cat /tmp/patrol_shizuku 2>/dev/null) | iAdb:$(cat /tmp/patrol_iadb 2>/dev/null)\" >> /sdcard/patrol.log",
+      "timeout": 10000
+    }
+  ],
+  "connections": [
+    {"from": "trigger", "to": "check_5037"},
+    {"from": "trigger", "to": "check_34953"},
+    {"from": "trigger", "to": "check_shizuku"},
+    {"from": "trigger", "to": "check_iadb"},
+    {"from": "check_5037", "to": "heal_adb", "condition": "on_failure"},
+    {"from": "check_34953", "to": "heal_adb", "condition": "on_failure"},
+    {"from": "check_shizuku", "to": "restart_shizuku", "condition": "on_failure"},
+    {"from": "check_iadb", "to": "restart_iadb", "condition": "on_failure"},
+    {"from": "heal_adb", "to": "report"},
+    {"from": "restart_shizuku", "to": "report"},
+    {"from": "restart_iadb", "to": "report"},
+    {"from": "check_5037", "to": "report", "condition": "on_success"},
+    {"from": "check_34953", "to": "report", "condition": "on_success"},
+    {"from": "check_shizuku", "to": "report", "condition": "on_success"},
+    {"from": "check_iadb", "to": "report", "condition": "on_success"}
+  ]
+}
